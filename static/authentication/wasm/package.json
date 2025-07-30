@@ -1,0 +1,15 @@
+{
+  "name": "zcore_crypto",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "zcore_crypto_bg.wasm",
+    "zcore_crypto.js",
+    "zcore_crypto.d.ts"
+  ],
+  "main": "zcore_crypto.js",
+  "types": "zcore_crypto.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

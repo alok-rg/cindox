@@ -1,0 +1,15 @@
+{
+  "name": "chat_crypto_wasm",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "chat_crypto_wasm_bg.wasm",
+    "chat_crypto_wasm.js",
+    "chat_crypto_wasm.d.ts"
+  ],
+  "main": "chat_crypto_wasm.js",
+  "types": "chat_crypto_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

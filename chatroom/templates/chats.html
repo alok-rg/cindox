@@ -1,0 +1,154 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZCore Chat</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
+    <link rel="stylesheet" href="{% static 'chatroom/css/chats.css' %}">
+</head>
+
+<body>
+    <div class="chat-container">
+        <!-- Top Navigation -->
+        <nav class="top-nav">
+            <div class="user-info">
+                <button class="mobile-toggle" id="mobileToggleBtn">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <img src="{{ user.profile.profile_picture.url }}" alt="User Avatar" class="user-avatar">
+                <div class="user-details">
+                    <h3 id="first_name">{{ user.first_name }}</h3>
+                    <p id="username">{{ user.username }}</p>
+                </div>
+            </div>
+            <div style="display: flex; align-items: center;">
+                <button class="contact-requests-icon" onclick="toggleContactRequests()">
+                    <i class="fas fa-comment-dots"></i>
+                    {% if friend_requests %}
+                    <span class="notification-badge">{{ friend_requests|length }}</span>
+                    {% endif %}
+                </button>
+                <button class="logout-btn" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </nav>
+
+        <!-- Contacts Panel -->
+        <div class="contacts-panel" id="contactsPanel">
+            <div class="contacts-header">
+                <h2><i class="fas fa-comments"></i> Contacts</h2>
+                <input type="text" class="search-box" placeholder="Search contacts...">
+            </div>
+
+            <!-- Contact List -->
+            <div class="contacts-list">
+                {% for contact in contacts %}
+                <div class="contact-item" data-user-id="{{ contact.contact_user.id }}">
+                    <div style="position: relative;">
+                        <img src="{{ contact.contact_user.profile.profile_picture.url }}" alt="Contact"
+                            class="contact-avatar">
+                    </div>
+                    <div class="contact-info">
+                        <h4 class="take-name">{{ contact.contact_user.first_name }}</h4>
+                        <div class="online-status"></div>
+                        <p class="take-username" style="display: none;">{{ contact.contact_user.username }}</p>
+                        {% if contact.unread_count > 0 %}
+                        <span class="unread-badge" style="display:inline-block">{{ contact.unread_count }}</span>
+                        {% else %}
+                        <span class="unread-badge" style="display:none"></span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <div class="chat-area">
+            <!-- Chat Header -->
+            <div class="chat-header">
+                <img src="{{ user.profile.profile_picture.url }}" class="chat-header-avatar" style="display: none;">
+                <div id="chat-root" data-user-id="{{ user.id }}"></div>
+                <div class="chat-header-info" style="display: none;">
+                    <h3></h3>
+                    <p></p>
+                </div>
+            </div>
+
+            <!-- Messages Container -->
+            <div class="messages-container" id="messagesContainer">
+
+            </div>
+
+            <!-- Message Input -->
+            <div class="message-input-container">
+                <input type="text" class="message-input" id="messageInput" placeholder="Type your message..." name="" autocomplete="off">
+                <button class="send-btn" onclick="sendMessage()">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Contact Requests Floating Panel -->
+        <div class="contact-requests-panel" id="contactRequestsPanel">
+            <div class="panel-header">
+                <h3><i class="fas fa-user-plus"></i> Contact Requests</h3>
+                <button class="close-panel" onclick="closeContactRequests()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="panel-content">
+                <!-- Send Request Section -->
+                <div class="send-request-section">
+                    <h4>Send Friend Request</h4>
+                    <div class="request-form">
+                        <input type="text" class="username-input" id="usernameInput" placeholder="Enter username">
+                        <button class="send-request-btn" id="sendRequestBtn" onclick="sendFriendRequest()">
+                            Send
+                        </button>
+                    </div>
+                    <div class="status-message" id="statusMessage"></div>
+                </div>
+
+                <!-- Pending Requests Section -->
+                <div class="pending-requests-section">
+                    <h4 style="margin-bottom: 0.5rem;">Pending Requests</h4>
+                    <div class="pending-requests-list">
+                        {% if friend_requests %}
+                        {% for req in friend_requests %}
+                        <div class="request-item">
+                            <img src="{{ req.sender.profile.profile_picture.url }}" alt="User" class="request-avatar">
+                            <div class="request-info">
+                                <h5>{{ req.sender.username }}</h5>
+                                <p>{{ req.created_at }}</p>
+                            </div>
+                            <div class="request-actions">
+                                <button class="accept-btn"
+                                    onclick="acceptRequest('{{ req.sender.username }}')">Accept</button>
+                                <button class="reject-btn"
+                                    onclick="rejectRequest('{{ req.sender.username }}')">Reject</button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="no-requests" id="noRequestsMessage">
+                            <p>No pending friend requests.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="{% static 'chatroom/js/wasm_d.js' %}"></script>
+    <script src="{% static 'chatroom/js/chats.js' %}"></script>
+    <script src="{% static 'chatroom/js/notifications.js' %}"></script>
+</body>
+
+</html>

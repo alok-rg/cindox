@@ -1,0 +1,142 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Modern Chat</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'authentication/css/auth.css' %}">
+    <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" type="image/x-icon">
+</head>
+
+<body>
+    <div class="auth-container" data-theme="dark">
+        <!-- Main Content -->
+        <div class="auth-content">
+            <!-- Left Side - Branding -->
+            <div class="auth-branding">
+                <div class="brand-logo">
+                    <i class="fas fa-comments"></i>
+                    <h1>Modern Chat</h1>
+                </div>
+                <p class="brand-tagline">Connect with friends and colleagues in style</p>
+                <div class="brand-features">
+                    <div class="feature">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>Secure & Private</span>
+                    </div>
+                    <div class="feature">
+                        <i class="fas fa-mobile-alt"></i>
+                        <span>Mobile Responsive</span>
+                    </div>
+                    <div class="feature">
+                        <i class="fas fa-moon"></i>
+                        <span>Dark & Light Themes</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side - Login Form -->
+            <div class="auth-form-container">
+                <div class="auth-form-wrapper">
+                    <div class="auth-header">
+                        <h2>Welcome Back</h2>
+                        <p>Sign in to your account to continue</p>
+                    </div>
+
+                    <form class="auth-form" id="loginForm" method="post" action="{% url 'login' %}">
+                        {% csrf_token %}
+
+                        <!-- Django Messages -->
+                        {% if messages %}
+                        <div class="django-messages">
+                            {% for message in messages %}
+                            <div class="message-item {{ message.tags }}">
+                                <i class="fas 
+                                        {% if message.tags == 'error' %}fa-exclamation-circle
+                                        {% elif message.tags == 'success' %}fa-check-circle
+                                        {% else %}fa-info-circle
+                                        {% endif %}"></i>
+                                {{ message }}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Username Field -->
+                        <div class="form-group">
+                            <label for="username" class="form-label">
+                                <i class="fas fa-user"></i>
+                                Username
+                            </label>
+                            <div class="input-wrapper">
+                                <input type="text" id="username" name="username" class="form-input"
+                                    placeholder="Enter your username" required autocomplete="username">
+                                <div class="input-icon">
+                                    <i class="fas fa-user"></i>
+                                </div>
+                            </div>
+                            <div class="error-message" id="usernameError"></div>
+                        </div>
+
+                        <!-- Password Field -->
+                        <div class="form-group">
+                            <label for="password" class="form-label">
+                                <i class="fas fa-lock"></i>
+                                Password
+                            </label>
+                            <div class="input-wrapper">
+                                <input type="password" id="password" name="password" class="form-input"
+                                    placeholder="Enter your password" required autocomplete="current-password">
+                                <div class="input-icon">
+                                    <i class="fas fa-lock"></i>
+                                </div>
+                                <button type="button" class="password-toggle" id="passwordToggle">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div class="error-message" id="passwordError"></div>
+                        </div>
+
+                        <!-- Remember Me & Forgot Password
+                        <div class="form-extras">
+                            <label class="checkbox-wrapper">
+                                <input type="checkbox" id="rememberMe" name="remember_me">
+                                <span class="checkmark"></span>
+                                <span class="checkbox-label">Remember me</span>
+                            </label>
+                            <a href="#" class="forgot-password">Forgot password?</a>
+                        </div> -->
+
+                        <!-- Submit Button -->
+                        <button type="submit" class="auth-button" id="loginButton">
+                            <span class="button-text">Sign In</span>
+                            <div class="button-loading" style="display: none;">
+                                <i class="fas fa-spinner fa-spin"></i>
+                            </div>
+                        </button>
+
+                        <!-- General Error Message -->
+                        <div class="general-error" id="generalError" style="display: none;"></div>
+                    </form>
+
+                    <!-- Switch to Register -->
+                    <div class="auth-switch">
+                        <p>Don't have an account? <a href="{% url 'register' %}" class="switch-link">Create one</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="{% static 'authentication/js/auth.js' %}"></script>
+</body>
+
+</html>
