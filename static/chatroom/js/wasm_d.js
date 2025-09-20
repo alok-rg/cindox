@@ -75,9 +75,28 @@ async function deleteDecryptedKeyFromDB() {
     });
 }
 
+// Helper to open IndexedDB
+async function openUserKeysDB() {
+    return new Promise((resolve, reject) => {
+        const dbRequest = indexedDB.open("UserKeysDB", 1);
+        dbRequest.onsuccess = event => resolve(event.target.result);
+        dbRequest.onerror = event => reject(event.target.error);
+    });
+}
+
+// Helper to get a value from an object store
+async function getFromStore(db, storeName, key) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const request = store.get(key);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
 // decrypt the private key using WASM and store it temporarily
 async function getDecryptedPrivateKey() {
-    // Try to get the decrypted key from temp storage
     let cachedKey = null;
     try {
         cachedKey = await getDecryptedKeyFromDB();
@@ -88,7 +107,6 @@ async function getDecryptedPrivateKey() {
         return cachedKey;
     }
 
-    // If no cached key, prompt for password and create/store new one
     userPassword = prompt('Enter your password :');
     if (!userPassword) {
         alert('Password is required to access encrypted features.');
@@ -97,104 +115,48 @@ async function getDecryptedPrivateKey() {
     }
 
     try {
-        // Load WASM
         await init('/static/authentication/wasm/zcore_crypto_bg.wasm');
 
-        // Get encrypted private key from IndexedDB
-        const dbRequest = indexedDB.open("UserKeysDB", 1);
+        const db = await openUserKeysDB();
+        const result = await getFromStore(db, "keys", "privateKey");
 
-        return new Promise((resolve, reject) => {
-            dbRequest.onsuccess = function (event) {
-                const db = event.target.result;
-                const tx = db.transaction("keys", "readonly");
-                const store = tx.objectStore("keys");
-                const request = store.get("privateKey");
+        if (!result) {
+            alert('No encrypted private key found. Please register first.');
+            throw new Error('No private key found');
+        }
 
-                request.onsuccess = function () {
-                    if (request.result) {
-                        try {
-                            // fetch encrypted private key and salt
-                            const { encryptedPrivateKeyHex, salt } = request.result;
+        const { encryptedPrivateKeyHex, salt } = result;
+        const saltBytes = Uint8Array.from(atob(salt), c => c.charCodeAt(0));
+        const encoder = new TextEncoder();
+        const passwordBytes = encoder.encode(userPassword);
 
-                            // Convert hex to base64
-                            const saltBytes = Uint8Array.from(atob(salt), c => c.charCodeAt(0));
-                            const encoder = new TextEncoder();
-                            const passwordBytes = encoder.encode(userPassword);
+        const keyMaterial = await crypto.subtle.importKey(
+            'raw', passwordBytes, { name: 'PBKDF2' }, false, ['deriveBits']
+        );
+        const derivedBits = await crypto.subtle.deriveBits(
+            {name: 'PBKDF2', salt: saltBytes, iterations: 100000, hash: 'SHA-256'}, keyMaterial, 384
+        );
+        const derivedArray = new Uint8Array(derivedBits);
+        const aesKey = Array.from(derivedArray.slice(0, 32));
+        const iv = Array.from(derivedArray.slice(32, 48));
+        const aesKeyHex = aesKey.map(b => b.toString(16).padStart(2, '0')).join('');
+        const ivHex = iv.map(b => b.toString(16).padStart(2, '0')).join('');
 
-                            // Derive AES key and IV from password using PBKDF2
-                            crypto.subtle.importKey(
-                                'raw',
-                                passwordBytes,
-                                { name: 'PBKDF2' },
-                                false,
-                                ['deriveBits']
-                            ).then(keyMaterial => {
-                                return crypto.subtle.deriveBits(
-                                    {
-                                        name: 'PBKDF2',
-                                        salt: saltBytes,
-                                        iterations: 100000,
-                                        hash: 'SHA-256'
-                                    },
-                                    keyMaterial,
-                                    48 * 8 // 48 bytes = 384 bits
-                                );
-                            }).then(derivedBits => {
-                                const derivedArray = new Uint8Array(derivedBits);
-                                const aesKey = Array.from(derivedArray.slice(0, 32));
-                                const iv = Array.from(derivedArray.slice(32, 48));
+        const decryptedBase64 = aes_decrypt(aesKeyHex, ivHex, encryptedPrivateKeyHex);
 
-                                // Convert to hex strings for WASM
-                                const aesKeyHex = aesKey.map(b => b.toString(16).padStart(2, '0')).join('');
-                                const ivHex = iv.map(b => b.toString(16).padStart(2, '0')).join('');
+        try {
+            await storeDecryptedKeyTemporarily(decryptedBase64);
+        } catch (error) {
+            console.warn('Failed to store decrypted key temporarily:', error);
+        }
 
-                                // Decrypt with WASM
-                                const decryptedBase64 = aes_decrypt(aesKeyHex, ivHex, encryptedPrivateKeyHex);
-
-                                // Store decrypted key temporarily in IndexedDB
-                                storeDecryptedKeyTemporarily(decryptedBase64).then(() => {
-                                    resolve(decryptedBase64);
-                                }).catch(error => {
-                                    console.warn('Failed to store decrypted key temporarily:', error);
-                                    // Still resolve with the key even if storage fails
-                                    resolve(decryptedBase64);
-                                });
-
-                            }).catch(error => {
-                                console.error('Key derivation failed:', error);
-                                alert('Failed to decrypt private key. Wrong password?');
-                                reject(error);
-                            });
-
-                        } catch (error) {
-                            console.error('Decryption failed:', error);
-                            alert('Failed to decrypt private key. Wrong password?');
-                            reject(error);
-                        }
-                    } else {
-                        alert('No encrypted private key found. Please register first.');
-                        reject(new Error('No private key found'));
-                    }
-                };
-            };
-        });
+        return decryptedBase64;
 
     } catch (error) {
         console.error('Failed to decrypt private key:', error);
         alert('Failed to access encrypted features.');
         throw error;
     }
-}
-
-// Function to use when you need the private key
-export async function getPrivateKeyForOperation() {
-    return await getDecryptedPrivateKey();
-}
-
-// Clear session data when user logs out (call this from your logout function)
-export function clearSession() {
-    userPassword = null;
-    deleteDecryptedKeyFromDB(); // Clean up temp storage
 }
 
 // Clean up when user leaves the page
