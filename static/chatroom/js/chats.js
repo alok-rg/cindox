@@ -126,7 +126,7 @@ function removeRequestItem(username) {
 
 // Main : function to set session ID for the last message object
 async function setSessionId(lastMessageObj) {
-    let sessionName;
+    if (sessionStorage.getItem(username)) return;
     const response = await fetch('/get_session_id/', {
         method: 'POST',
         headers: {
@@ -137,19 +137,19 @@ async function setSessionId(lastMessageObj) {
             sender: lastMessageObj.sender,
             receiver: lastMessageObj.receiver
         })
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                sessionName = data.session_id;
-                aes_key = data.aes_key;
-                uname = data.uname;
-                sessionStorage.setItem(uname, JSON.stringify({
-                    aes_key: aes_key,
-                    session_id: sessionName
-                }));
-            }
-        });
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+        const sessionName = data.session_id;
+        const aes_key = data.aes_key;
+        const uname = data.uname;
+        sessionStorage.setItem(uname, JSON.stringify({
+            aes_key: aes_key,
+            session_id: sessionName
+        }));
+    }
 }
 
 // Main : function to decrypt messages for display
@@ -175,53 +175,55 @@ async function decryptMessageForDisplay(encryptedContent, nonce, username) {
 }
 
 // Main : function to fetch messages for selected contact
-function fetchMessageForContact(username, setSessionId) {
+async function fetchMessageForContact(username, setSessionId) {
     const messagesContainer = document.getElementById('messagesContainer');
     messagesContainer.innerHTML = '';  // Clear existing messages
 
-    fetch('/get_messages/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-        },
-        body: JSON.stringify({ username: username })
-    })
-        .then(response => response.json())
-        .then(async data => {
-            if (data.success) {
-                if (data.messages.length > 0) {
-                    window.lastMessageObj = data.messages[data.messages.length - 1];
-                    await setSessionId(window.lastMessageObj);
-                }
-                for (let i = 0; i < data.messages.length; i++) {
-                    let decryptedContent = data.messages[i].content;
-                    if (data.messages[i].nonce) {
-                        decryptedContent = await decryptMessageForDisplay(data.messages[i].content, data.messages[i].nonce, username);
-                    }
-                    const msgDiv = document.createElement('div');
-                    msgDiv.className = 'message ' + (data.messages[i].is_sent ? 'sent' : 'received');
-                    
-                    // Create structure safely to prevent XSS
-                    const messageBubble = document.createElement('div');
-                    messageBubble.className = 'message-bubble';
-                    
-                    // Use textContent to safely set message content
-                    messageBubble.textContent = decryptedContent;
-                    
-                    const messageTime = document.createElement('div');
-                    messageTime.className = 'message-time';
-                    messageTime.textContent = data.messages[i].timestamp;
-                    messageBubble.appendChild(messageTime);
-                    
-                    msgDiv.appendChild(messageBubble);
-                    messagesContainer.appendChild(msgDiv);
-                }
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            } else {
-                messagesContainer.innerHTML = '<div class="no-messages">No messages found.</div>';
-            }
+    try {
+        const response = await fetch('/get_messages/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ username: username })
         });
+        const data = await response.json();
+
+        if (data.success) {
+            if (data.messages.length > 0) {
+                window.lastMessageObj = data.messages[data.messages.length - 1];
+                await setSessionId(window.lastMessageObj);
+            }
+            for (let i = 0; i < data.messages.length; i++) {
+                let decryptedContent = data.messages[i].content;
+                if (data.messages[i].nonce) {
+                    decryptedContent = await decryptMessageForDisplay(data.messages[i].content, data.messages[i].nonce, username);
+                }
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'message ' + (data.messages[i].is_sent ? 'sent' : 'received');
+                
+                // Create structure safely to prevent XSS
+                const messageBubble = document.createElement('div');
+                messageBubble.className = 'message-bubble';
+                messageBubble.textContent = decryptedContent;
+                
+                const messageTime = document.createElement('div');
+                messageTime.className = 'message-time';
+                messageTime.textContent = data.messages[i].timestamp;
+                messageBubble.appendChild(messageTime);
+                
+                msgDiv.appendChild(messageBubble);
+                messagesContainer.appendChild(msgDiv);
+            }
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        } else {
+            messagesContainer.innerHTML = '<div class="no-messages">No messages found.</div>';
+        }
+    } catch (error) {
+        messagesContainer.innerHTML = '<div class="no-messages">Error loading messages.</div>';
+        console.error(error);
+    }
 }
 
 // Main : function to handle contact selection and update chat header
@@ -282,6 +284,7 @@ async function sendMessage() {
         return;
     }
     if (!message) return;
+
     const uname = messageInput.name;
     const sessionInfo = JSON.parse(sessionStorage.getItem(uname));
     if (!sessionInfo || !sessionInfo.aes_key) {
@@ -298,9 +301,8 @@ async function sendMessage() {
     }
 
     if (chatSocket && chatSocket.readyState === WebSocket.OPEN) {
-        // Dynamically import the crypto module
-        import('/static/chatroom/js/chat_crypto_module.js').then(async module => {
-
+        try {
+            const module = await import('/static/chatroom/js/chat_crypto_module.js');
             const aes_key_b64 = await module.decrypt_aes_key(encrypted_aes_key_b64, pk);
             const nonce_b64 = await module.generate_nonce_fun();
             const encryptedMessage = await module.encrypt_message_fun(aes_key_b64, message, nonce_b64);
@@ -314,10 +316,10 @@ async function sendMessage() {
             }));
 
             messageInput.value = '';
-        }).catch(error => {
+        } catch (error) {
             console.error('Encryption module error:', error);
             alert('Could not encrypt message.');
-        });
+        }
     }
 }
 
@@ -365,7 +367,7 @@ function openChatSocket(contactId) {
 }
 
 // Main : function to send a friend request
-function sendFriendRequest() {
+async function sendFriendRequest() {
     const usernameInput = document.getElementById('usernameInput');
     const username = usernameInput.value.trim();
     const statusMessage = document.getElementById('statusMessage');
@@ -381,71 +383,73 @@ function sendFriendRequest() {
     sendBtn.disabled = true;
     sendBtn.textContent = 'Sending...';
 
-    fetch('/send_friend_request/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-        },
-        body: JSON.stringify({ username: username })
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                statusMessage.textContent = data.message || `Friend request sent to ${username}!`;
-                statusMessage.style.color = '#00ff88';
-                usernameInput.value = '';
-            } else {
-                statusMessage.textContent = data.error || 'User not found or request failed.';
-                statusMessage.style.color = '#ff6b6b';
-            }
-        })
-        .catch(() => {
-            statusMessage.textContent = 'An error occurred. Please try again.';
-            statusMessage.style.color = '#ff6b6b';
-        })
-        .finally(() => {
-            sendBtn.disabled = false;
-            sendBtn.textContent = 'Send';
+    try {
+        const response = await fetch('/send_friend_request/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ username: username })
         });
+        const data = await response.json();
+
+        if (data.success) {
+            statusMessage.textContent = data.message || `Friend request sent to ${username}!`;
+            statusMessage.style.color = '#00ff88';
+            usernameInput.value = '';
+        } else {
+            statusMessage.textContent = data.error || 'User not found or request failed.';
+            statusMessage.style.color = '#ff6b6b';
+        }
+    } catch (error) {
+        statusMessage.textContent = 'An error occurred. Please try again.';
+        statusMessage.style.color = '#ff6b6b';
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+    }
 }
 
 // Main : function to accept a friend request
-function acceptRequest(username) {
-    import('/static/chatroom/js/chat_crypto_module.js').then(module => {
-        module.acceptRequest(username).then(data => {
-            if (data.success) {
-                removeRequestItem(username);
-            } else {
-                alert(data.error);
-            }
-        }).catch(error => {
-            console.error(error);
-            alert('Could not process friend request.');
-        });
-    });
+async function acceptRequest(username) {
+    try {
+        const module = await import('/static/chatroom/js/chat_crypto_module.js');
+        const data = await module.acceptRequest(username);
+        if (data.success) {
+            removeRequestItem(username);
+        } else {
+            alert(data.error);
+        }
+    } catch (error) {
+        console.error(error);
+        alert('Could not process friend request.');
+    }
 }
 window.acceptRequest = acceptRequest;
 
 
 // Main : function to reject a friend request
-function rejectRequest(username) {
-    fetch('/reject_friend_request/', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': getCSRFToken()
-        },
-        body: JSON.stringify({ username: username })
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                removeRequestItem(username);
-            } else {
-                alert(data.error);
-            }
+async function rejectRequest(username) {
+    try {
+        const response = await fetch('/reject_friend_request/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCSRFToken()
+            },
+            body: JSON.stringify({ username: username })
         });
+        const data = await response.json();
+        if (data.success) {
+            removeRequestItem(username);
+        } else {
+            alert(data.error);
+        }
+    } catch (error) {
+        console.error(error);
+        alert('Could not process reject request.');
+    }
 }
 
 // Main : function to logout the user
